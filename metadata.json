@@ -1,0 +1,6 @@
+{
+  "name": "Kinetic Lab",
+  "description": "A high-performance sports analytics dashboard, real-time sensor telemetry visualizer, and data integration platform.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
