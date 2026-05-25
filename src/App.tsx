@@ -17,7 +17,7 @@ export default function App() {
   
   // Live session state
   const [isRecording, setIsRecording] = useState(false);
-  const [activeAthlete, setActiveAthlete] = useState('Marcus V. (Forward)');
+  const [activeAthlete, setActiveAthlete] = useState('Jade J. (Featherweight)');
 
   // Handlers
   const handleAddSession = (newSession: TelemetrySession) => {

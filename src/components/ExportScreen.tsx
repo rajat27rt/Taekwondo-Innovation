@@ -324,7 +324,7 @@ export default function ExportScreen({
               </div>
               <h4 className="font-headline font-bold text-sm text-[#dee5ff] mb-2">Performance Summary (CSV)</h4>
               <p className="text-xs text-[#a3aac4] leading-relaxed">
-                Aggregated statistics per kick drill: average velocity, terminal G-force peaks, rotational coefficients, and spatial boot indices.
+                Aggregated statistics per strike drill: average velocity, terminal G-force peaks, rotational coefficients, and spatial sensor indices.
               </p>
             </div>
           </div>
@@ -439,7 +439,7 @@ export default function ExportScreen({
             <img 
               className="absolute inset-0 w-full h-full object-cover brightness-50 group-hover:scale-105 transition-transform duration-700" 
               src={VISUAL_ASSETS.quickPreviewKick} 
-              alt="Soccer Kick"
+              alt="Taekwondo strike simulation"
               referrerPolicy="no-referrer"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-[#060e20] to-transparent" />

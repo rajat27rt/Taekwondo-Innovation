@@ -17,6 +17,46 @@ export default function LiveScreen({
   activeAthlete,
   setActiveAthlete
 }: LiveScreenProps) {
+  // Gender state
+  const [gender, setGender] = useState<'male' | 'female'>('female');
+
+  // Olympic World Taekwondo Weight Class Divisions and PSS limits
+  const WEIGHT_CLASSES = gender === 'male' ? [
+    { id: 'Flyweight', label: 'Flyweight (-58kg)', threshold: 22 }, // Joules minimum to register punch/kick scores for Men
+    { id: 'Featherweight', label: 'Featherweight (-68kg)', threshold: 28 },
+    { id: 'Welterweight', label: 'Welterweight (-80kg)', threshold: 34 },
+    { id: 'Heavyweight', label: 'Heavyweight (+80kg)', threshold: 44 },
+  ] : [
+    { id: 'Flyweight', label: 'Flyweight (-49kg)', threshold: 16 }, // Joules minimum to register punch/kick scores for Women
+    { id: 'Featherweight', label: 'Featherweight (-57kg)', threshold: 20 },
+    { id: 'Welterweight', label: 'Welterweight (-67kg)', threshold: 26 },
+    { id: 'Heavyweight', label: 'Heavyweight (+67kg)', threshold: 32 },
+  ];
+
+  const KICK_TYPES = [
+    { name: 'Dolyeo Chagi (Roundhouse)', style: 'Instep (Baldeung)', criteria: 'High transverse gyro Y-Z, terminal Accel surge' },
+    { name: 'Ap Chagi (Front Snap)', style: 'Ball of Foot (Apchook)', criteria: 'Pure sagittal pitch gyro Y, sharp peak shock' },
+    { name: 'Dwit Chagi (Spinning Back)', style: 'Heel (Dwitchook)', criteria: 'High spin roll gyro X, massive axial deceleration' },
+    { name: 'Naeryeo Chagi (Axe Kick)', style: 'Heel (Dwitchook)', criteria: 'Vertical drop downward velocity deflection' },
+    { name: 'Yeop Chagi (Side Kick)', style: 'Outer Blade (Balnal)', criteria: 'Lateral force lock with sustained displacement' },
+    { name: 'Bandae Dolyeo Chagi (Spinning Hook)', style: 'Heel (Dwitchook)', criteria: 'Extreme multi-axis 360° gyro spin, maximum angular velocity' },
+    { name: 'Bandal Chagi (Crescent/Semi-Roundhouse)', style: 'Instep (Baldeung)', criteria: 'Fast inward curve arch, moderate trajectory sweep' },
+    { name: 'Miro Chagi (Push Kick)', style: 'Sole of Foot (Balbadak)', criteria: 'Low gyro, sustained low-acceleration linear displacement' },
+    { name: 'Huryeo Chagi (Whip/Hook Kick)', style: 'Heel/Sole', criteria: 'Inward horizontal sweeping profile, high snapping recoil Y' },
+  ];
+
+  // Taekwondo scoring setup
+  const [selectedWeight, setSelectedWeight] = useState('Featherweight');
+  const [kickMode, setKickMode] = useState<'auto' | 'manual'>('auto');
+  const [manualKick, setManualKick] = useState('Dolyeo Chagi (Roundhouse)');
+  const [lastDetectedKick, setLastDetectedKick] = useState('Dolyeo Chagi (Roundhouse)');
+  const [latestPSSJoules, setLatestPSSJoules] = useState<number | null>(null);
+  const [classifierLogs, setClassifierLogs] = useState<string[]>([
+    "[System] WitMotion shin-guard classifier initialized at 500Hz.",
+    "[WT901] Calibration valid. Absolute angle reference locked.",
+    "[System] Ready to harvest live Taekwondo scoring vectors."
+  ]);
+
   // Sensor simulated connections
   const [rightSensorConnected, setRightSensorConnected] = useState(true);
   const [leftSensorConnected, setLeftSensorConnected] = useState(true);
@@ -52,7 +92,7 @@ export default function LiveScreen({
         const deltaAccel = (Math.random() - 0.48) * 0.5;
         const deltaSpin = (Math.random() - 0.5) * 15;
         
-        // Random Soccer Kick Spike!
+        // Random Taekwondo Strike / Kick Spike!
         let isKick = Math.random() < 0.08; // 8% chance per tick
         let forceSpike = 0;
         let accelSpike = 0;
@@ -64,6 +104,36 @@ export default function LiveScreen({
           accelSpike = Number((Math.random() * 10 + 10).toFixed(1)); // Gs
           spinSpike = Math.floor(Math.random() * 300) + 400; // RPM
           kickVel = Math.floor(Math.random() * 45) + 75; // km/h
+          
+          // Determine simulated kick classification details
+          let detectedKickName = '';
+          let detectedKickStyle = '';
+          if (kickMode === 'manual') {
+            detectedKickName = manualKick;
+            const match = KICK_TYPES.find(k => k.name === manualKick);
+            detectedKickStyle = match ? match.style : 'Foot Protector';
+          } else {
+            // Randomly auto classify based on IMU values
+            const randomType = KICK_TYPES[Math.floor(Math.random() * KICK_TYPES.length)];
+            detectedKickName = randomType.name;
+            detectedKickStyle = randomType.style;
+          }
+
+          // Calculate estimated World Taekwondo (WT) score impact force in Joules
+          const calculatedJoules = Math.floor((forceSpike * 0.04) + (accelSpike * 0.35) + (kickVel * 0.08));
+          setLatestPSSJoules(calculatedJoules);
+
+          const activeLimit = WEIGHT_CLASSES.find(w => w.id === selectedWeight)?.threshold || 20;
+          const isScored = calculatedJoules >= activeLimit;
+
+          // Timestamped log entry inside WitMotion Classifier
+          const nowStr = new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          const log1 = `[${nowStr}] 🚨 [WitMotion] Force Peak: ${forceSpike}N | G-Peak: ${accelSpike}G`;
+          const log2 = `[${nowStr}] 🤖 [IMU CLASSIFIER] "${detectedKickName}" via ${detectedKickStyle}`;
+          const log3 = `[${nowStr}] 🛡️ [DAEDO PSS] ${calculatedJoules}J (Min Required to Score: ${activeLimit}J) -> ${isScored ? '✅ SCORE CONFIRMED!' : '❌ BELOW THRESHOLD'}`;
+
+          setClassifierLogs(prev => [log3, log2, log1, ...prev].slice(0, 8));
+          setLastDetectedKick(detectedKickName);
           
           setKicksRecorded(prev => prev + 1);
           setInstantForce(forceSpike);
@@ -115,7 +185,7 @@ export default function LiveScreen({
       if (streamRef.current) clearInterval(streamRef.current);
       if (clockRef.current) clearInterval(clockRef.current);
     };
-  }, [isRecording]);
+  }, [isRecording, selectedWeight, kickMode, manualKick, gender]);
 
   const toggleRecording = () => {
     if (isRecording) {
@@ -179,10 +249,12 @@ export default function LiveScreen({
       <section className="p-6 bg-[#091328] rounded-2xl border-l-2 border-[#81ecff] relative overflow-hidden">
         <div className="absolute right-0 top-0 w-[500px] h-full opacity-10 bg-[radial-gradient(circle_at_right,rgba(129,236,255,0.15),transparent)] pointer-events-none" />
         
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6 relative z-10">
-          <div className="space-y-4">
+        <div className="flex flex-col xl:flex-row xl:items-start justify-between gap-6 relative z-10 w-full">
+          <div className="space-y-4 flex-1">
             <span className="font-body text-[10px] uppercase tracking-[0.15rem] text-[#a3aac4] font-semibold">Active Tracker Console</span>
-            <div className="flex flex-col sm:flex-row gap-4 sm:items-center">
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+              {/* Athlete Name */}
               <div>
                 <label className="block text-xs text-[#a3aac4] mb-1 uppercase font-body font-semibold tracking-wider">Target Athlete</label>
                 <div className="relative">
@@ -192,55 +264,170 @@ export default function LiveScreen({
                     value={activeAthlete}
                     onChange={(e) => setActiveAthlete(e.target.value)}
                     disabled={isRecording}
-                    className="pl-9 pr-4 py-2 bg-[#192540] border border-[#40485d]/30 text-[#dee5ff] text-sm rounded-xl focus:outline-none focus:border-[#81ecff] disabled:opacity-50 transition-colors w-64"
+                    className="pl-9 pr-4 py-2 bg-[#192540] border border-[#40485d]/30 text-[#dee5ff] text-sm rounded-xl focus:outline-none focus:border-[#81ecff] disabled:opacity-50 transition-colors w-full"
                     placeholder="Enter athlete name"
                   />
                 </div>
               </div>
 
-              <div className="flex flex-col justify-end pt-5 sm:pt-0">
-                <button
-                  onClick={toggleRecording}
-                  className={`flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl font-body font-bold text-sm transition-all shadow-[0_4px_12px_rgba(0,0,0,0.2)] ${
-                    isRecording
-                      ? 'bg-red-500 hover:bg-red-600 text-white animate-pulse'
-                      : 'bg-gradient-to-r from-[#81ecff] to-[#00e3fd] text-[#003840] hover:scale-[1.02] active:scale-95'
-                  }`}
-                >
-                  {isRecording ? <Square className="h-4 w-4 fill-white" /> : <Play className="h-4 w-4 fill-current" />}
-                  {isRecording ? 'STOP SESSION' : 'START HARVESTING'}
-                </button>
+              {/* Division Gender Toggle */}
+              <div>
+                <label className="block text-xs text-[#a3aac4] mb-1 uppercase font-body font-semibold tracking-wider">Division Gender</label>
+                <div className="flex bg-[#141f38] p-0.5 rounded-xl border border-[#40485d]/20 h-[38px]">
+                  <button
+                    type="button"
+                    disabled={isRecording}
+                    onClick={() => {
+                      setGender('female');
+                      if (activeAthlete.includes('Marcus') || activeAthlete.includes('Dae-Hoon')) {
+                        setActiveAthlete('Jade J. (Featherweight)');
+                      }
+                    }}
+                    className={`flex-1 text-[11px] font-bold rounded-lg transition-colors flex items-center justify-center gap-1 ${
+                      gender === 'female'
+                        ? 'bg-gradient-to-r from-pink-500/20 to-pink-500/30 border border-pink-500/40 text-pink-300'
+                        : 'text-[#a3aac4] hover:text-[#dee5ff]'
+                    }`}
+                  >
+                    ♀️ Female
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isRecording}
+                    onClick={() => {
+                      setGender('male');
+                      if (activeAthlete.includes('Jade')) {
+                        setActiveAthlete('Marcus V. (Heavyweight)');
+                      }
+                    }}
+                    className={`flex-1 text-[11px] font-bold rounded-lg transition-colors flex items-center justify-center gap-1 ${
+                      gender === 'male'
+                        ? 'bg-gradient-to-r from-blue-500/20 to-blue-500/30 border border-blue-500/40 text-blue-300'
+                        : 'text-[#a3aac4] hover:text-[#dee5ff]'
+                    }`}
+                  >
+                    ♂️ Male
+                  </button>
+                </div>
               </div>
+
+              {/* WT Weight Class Selector */}
+              <div>
+                <label className="block text-xs text-[#a3aac4] mb-1 uppercase font-body font-semibold tracking-wider">Weight division</label>
+                <select
+                  value={selectedWeight}
+                  onChange={(e) => setSelectedWeight(e.target.value)}
+                  disabled={isRecording}
+                  className="px-3 py-2 bg-[#192540] border border-[#40485d]/30 text-[#dee5ff] text-sm rounded-xl focus:outline-none focus:border-[#81ecff] disabled:opacity-50 transition-colors w-full h-[38px] font-semibold"
+                >
+                  {WEIGHT_CLASSES.map((wc) => (
+                    <option key={wc.id} value={wc.id}>
+                      {wc.label} (Min {wc.threshold}J)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Classification Mode */}
+              <div>
+                <label className="block text-xs text-[#a3aac4] mb-1 uppercase font-body font-semibold tracking-wider">Classification Mode</label>
+                <div className="flex bg-[#141f38] p-0.5 rounded-xl border border-[#40485d]/20 h-[38px]">
+                  <button
+                    type="button"
+                    disabled={isRecording}
+                    onClick={() => setKickMode('auto')}
+                    className={`flex-1 text-[11px] font-bold rounded-lg transition-colors ${
+                      kickMode === 'auto'
+                        ? 'bg-[#81ecff] text-[#003840]'
+                        : 'text-[#a3aac4] hover:text-[#dee5ff]'
+                    }`}
+                  >
+                    🤖 Auto IMU
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isRecording}
+                    onClick={() => setKickMode('manual')}
+                    className={`flex-1 text-[11px] font-bold rounded-lg transition-colors ${
+                      kickMode === 'manual'
+                        ? 'bg-[#81ecff] text-[#003840]'
+                        : 'text-[#a3aac4] hover:text-[#dee5ff]'
+                    }`}
+                  >
+                    ✍️ Manual
+                  </button>
+                </div>
+              </div>
+
+              {/* Drill / Manual Kick */}
+              <div>
+                <label className="block text-xs text-[#a3aac4] mb-1 uppercase font-body font-semibold tracking-wider">
+                  {kickMode === 'auto' ? 'AI Classified Target' : 'Manual Tag Target'}
+                </label>
+                <select
+                  value={manualKick}
+                  onChange={(e) => setManualKick(e.target.value)}
+                  disabled={kickMode === 'auto' || isRecording}
+                  className="px-3 py-2 bg-[#192540] border border-[#40485d]/30 text-[#dee5ff] text-sm rounded-xl focus:outline-none focus:border-[#81ecff] disabled:opacity-40 transition-colors w-full h-[38px]"
+                >
+                  {KICK_TYPES.map((kt) => (
+                    <option key={kt.name} value={kt.name}>
+                      {kt.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-4 items-center justify-between pt-2">
+              <div className="text-xs text-[#a3aac4] flex items-center gap-2">
+                <span className="inline-block w-2.5 h-2.5 rounded-full bg-[#81ecff] animate-pulse"></span>
+                <span>
+                  Calibrated for <strong className="text-[#81ecff] font-bold">{WEIGHT_CLASSES.find(w => w.id === selectedWeight)?.label}</strong> criteria: minimum scored threshold on Daedo target cells is <strong className="text-[#6bfe9c]">{WEIGHT_CLASSES.find(w => w.id === selectedWeight)?.threshold} Joules</strong>.
+                </span>
+              </div>
+              
+              <button
+                onClick={toggleRecording}
+                className={`flex items-center justify-center gap-2 px-8 py-2.5 rounded-xl font-body font-bold text-sm transition-all shadow-[0_4px_12px_rgba(0,0,0,0.3)] min-w-[200px] ${
+                  isRecording
+                    ? 'bg-red-500 hover:bg-red-600 text-white animate-pulse'
+                    : 'bg-gradient-to-r from-[#81ecff] to-[#00e3fd] text-[#003840] hover:scale-[1.02] active:scale-95'
+                }`}
+              >
+                {isRecording ? <Square className="h-4 w-4 fill-white" /> : <Play className="h-4 w-4 fill-current" />}
+                {isRecording ? 'STOP TELEMETRY' : 'START LIVE CAPTURE'}
+              </button>
             </div>
           </div>
 
-          <div className="space-y-2">
-            <span className="block text-xs text-[#a3aac4] uppercase font-body font-semibold tracking-wider">Boot Transceiver Array</span>
-            <div className="flex flex-wrap gap-3">
+          <div className="space-y-3 xl:w-72 border-t xl:border-t-0 xl:border-l border-[#192540]/60 pt-4 xl:pt-0 xl:pl-6">
+            <span className="block text-xs text-[#a3aac4] uppercase font-body font-semibold tracking-wider font-bold">Shin Transceivers (WT901BLE)</span>
+            <div className="flex flex-col gap-2">
               <button 
                 onClick={() => !isRecording && setRightSensorConnected(!rightSensorConnected)}
                 disabled={isRecording}
-                className={`px-4 py-2 rounded-xl flex items-center gap-2.5 border transition-all ${
+                className={`w-full px-4 py-2 rounded-xl flex items-center justify-between border transition-all ${
                   rightSensorConnected 
                     ? 'bg-[#006d37]/10 border-[#6bfe9c]/30 text-[#6bfe9c]' 
                     : 'bg-red-500/10 border-red-500/20 text-red-400 opacity-60'
                 }`}
               >
+                <span className="text-xs font-bold font-headline">RIGHT_SHIN_GUARD</span>
                 <span className={`w-2 h-2 rounded-full ${rightSensorConnected ? 'bg-[#6bfe9c] animate-pulse' : 'bg-red-400'}`}></span>
-                <span className="font-mono text-xs font-bold font-headline">RIGHT_BOOT_V5</span>
               </button>
 
               <button 
                 onClick={() => !isRecording && setLeftSensorConnected(!leftSensorConnected)}
                 disabled={isRecording}
-                className={`px-4 py-2 rounded-xl flex items-center gap-2.5 border transition-all ${
+                className={`w-full px-4 py-2 rounded-xl flex items-center justify-between border transition-all ${
                   leftSensorConnected 
                     ? 'bg-[#006d37]/10 border-[#6bfe9c]/30 text-[#6bfe9c]' 
                     : 'bg-red-500/10 border-red-500/20 text-red-400 opacity-60'
                 }`}
               >
+                <span className="text-xs font-bold font-headline">LEFT_SHIN_GUARD</span>
                 <span className={`w-2 h-2 rounded-full ${leftSensorConnected ? 'bg-[#6bfe9c] animate-pulse' : 'bg-red-400'}`}></span>
-                <span className="font-mono text-xs font-bold font-headline">LEFT_BOOT_V5</span>
               </button>
             </div>
           </div>
@@ -429,6 +616,48 @@ export default function LiveScreen({
                 <span>Signal Strength:</span>
                 <span className="text-[#6bfe9c]">-52 dBm (Excellent)</span>
               </div>
+            </div>
+          </div>
+
+          {/* WitMotion Pattern Classification Logs */}
+          <div className="bg-[#091328] rounded-2xl p-6 border border-[#192540]/30 shadow-xl space-y-4 flex flex-col justify-between min-h-[300px]">
+            <div>
+              <div className="flex items-center justify-between border-b border-[#192540]/50 pb-3">
+                <h3 className="font-headline text-xs font-bold uppercase tracking-widest text-[#dee5ff] flex items-center gap-2">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#6bfe9c] animate-pulse"></span>
+                  WitMotion Classifier
+                </h3>
+                <span className="text-[10px] bg-[#141f38] text-[#a3aac4] px-2 py-0.5 rounded border border-[#192540] font-mono">
+                  ACTIVE FEED
+                </span>
+              </div>
+              
+              <div className="space-y-2 mt-4 max-h-[190px] overflow-y-auto pr-1">
+                {classifierLogs.map((log, idx) => {
+                  let logColor = "text-[#a3aac4]";
+                  if (log.includes("SCORE CONFIRMED")) {
+                    logColor = "text-[#6bfe9c] font-semibold";
+                  } else if (log.includes("BELOW THRESHOLD")) {
+                    logColor = "text-red-400";
+                  } else if (log.includes("[IMU CLASSIFIER]")) {
+                    logColor = "text-[#81ecff] font-medium";
+                  }
+
+                  return (
+                    <div key={idx} className={`font-mono text-[10px] leading-relaxed break-all ${logColor}`}>
+                      {log}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            
+            <div className="pt-2 border-t border-[#192540]/30 text-[10px] text-[#a3aac4]">
+              {kickMode === 'auto' ? (
+                <p>🤖 Auto-processing shin angular velocity vector trends to identify strikes.</p>
+              ) : (
+                <p>✍️ Locking classification strictly to <strong>{manualKick.split(' ')[0]}</strong> tag drill.</p>
+              )}
             </div>
           </div>
         </div>

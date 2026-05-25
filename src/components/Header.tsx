@@ -41,7 +41,7 @@ export default function Header({ isRecording = false }: HeaderProps) {
               alt="Sports Analyst"
             />
           </div>
-          <span className="text-xs font-medium text-[#dee5ff]">Coach Rajat</span>
+          <span className="text-xs font-medium text-[#dee5ff]">Sabomnim Rajat</span>
         </div>
       </div>
     </header>
